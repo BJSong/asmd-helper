@@ -1,0 +1,5 @@
+<script setup lang="ts">
+defineProps<{name:string;size?:number}>()
+const paths:Record<string,string>={home:'M3 10 12 3l9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z',book:'M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-2H4Zm16 0h-4a3 3 0 0 0-3 3v14a4 4 0 0 1 4-2h3Z',sliders:'M5 3v7m0 4v7M12 3v12m0 4v2M19 3v2m0 4v12M2 10h6m1 9h6m1-14h6',calendar:'M5 5h14a2 2 0 0 1 2 2v13H3V7a2 2 0 0 1 2-2Zm2-3v6m10-6v6M3 11h18m-14 4h2m3 0h2m3 0h1',settings:'m9 3-1 3-3 1-1 4 2 2-1 3 3 3 3-1 3 1 3-3-1-3 2-2-1-4-3-1-1-3Zm3 6a3 3 0 1 0 0 6 3 3 0 0 0 0-6',arrow:'M4 12h15m-6-6 6 6-6 6',check:'m5 12 4 4L19 6',clock:'M12 8v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0',leaf:'M19 3C9 3 3 7 5 14s14 5 14-11ZM5 21 15 9',chevron:'m9 5 7 7-7 7',download:'M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5',refresh:'M20 7v5h-5M4 17v-5h5M6 6a8 8 0 0 1 14 6M4 12a8 8 0 0 0 14 6',close:'m6 6 12 12M6 18 18 6'}
+</script>
+<template><svg :width="size||20" :height="size||20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path :d="paths[name]||paths.book"/></svg></template>

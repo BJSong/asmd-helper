@@ -1,0 +1,37 @@
+{
+  "name": "afsr-math",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev-watchdog.mjs",
+    "build": "NITRO_PRESET=vercel nuxt build",
+    "build:vercel": "NITRO_PRESET=vercel nuxt build",
+    "preview": "node .output/server/index.mjs",
+    "postinstall": "nuxt prepare",
+    "test": "vitest run",
+    "typecheck": "nuxt typecheck",
+    "test:e2e": "playwright test",
+    "dev:once": "nuxt dev --host 127.0.0.1",
+    "build:local": "NITRO_PRESET=node-server nuxt build"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.1.0",
+    "idb": "^8.0.0",
+    "nuxt": "^4.6.1",
+    "tailwindcss": "^4.1.0",
+    "vue": "^3.5.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@types/node": "^26.6.5",
+    "fake-indexeddb": "^6.0.0",
+    "typescript": "^5.8.0",
+    "vitest": "^4.1.11",
+    "vue-router": "^5.4.0",
+    "vue-tsc": "^3.0.0"
+  },
+  "engines": {
+    "node": "^22.22.3 || ^24.15.0 || >=26"
+  }
+}
