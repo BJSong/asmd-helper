@@ -31,14 +31,15 @@
 - `repositories/`: IndexedDB와 Nuxt 서버 저장소, 충돌 감지, JSON 백업/복원
 - `app/`: 반응형 한국어 홈, 자유 학습, 풀이, 결과, 복습, 기록 달력, 계획, 데이터 설정
 - `server/api/cloud/`: 보호된 클라우드 API. Runtime 설정과 서버 접근 토큰이 준비되지 않으면 HTTP 503으로 비활성화
-- `supabase/migrations/`: revision CAS와 정규화된 학습 테이블의 원자적 쓰기, 비공개 RLS 정책
+- `supabase/migrations/`: 단일 학습 상태 스냅샷의 revision CAS와 비공개 RLS 정책. 세 번째 마이그레이션에서 앱이 사용하지 않던 파생 테이블을 보관 스키마로 이동
+- `tests/database.test.ts`: 실제 앱 상태를 PostgreSQL 호환 엔진에 저장·복원하는 스키마 계약 테스트
 - `docs/WORKFLOW.md`: 분석 → 설계 → 구현 → 테스트 → 완성 과정
 
 문제 난이도는 자리별 받아올림/받아내림과 학교 세로셈의 곱셈 올림을 기준으로 결정합니다. 나눗셈은 긴 나눗셈 몫의 자릿수 및 나누는 수의 구조를 사용합니다. 생성기는 출제 가능한 조합을 열거하거나 제한된 시도로 모으고, 중복·고갈 때 안내 오류를 반환합니다. 나머지가 있는 나눗셈은 몫과 나머지를 별도로 채점합니다.
 
 ## Supabase 연결 및 보안
 
-접근 보호가 검증되지 않은 채 Supabase service key를 공개 데이터 API에서 사용하지 않습니다. Supabase 프로젝트에서 `supabase/migrations/202610130001_initial.sql`과 `supabase/migrations/202610150001_spaced_review_schema.sql`을 순서대로 적용합니다. 기존 프로젝트에도 두 번째 마이그레이션을 적용해야 스키마 v2 저장을 사용할 수 있습니다. 이어서 Vercel Deployment Protection에서 프로덕션 도메인까지 접근 보호가 적용되는지 확인하고, 무작위 32자 이상의 서버 토큰을 생성합니다. 실제 값은 `.env` (로컬, gitignore 포함) 또는 Vercel 서버 환경 변수에 설정합니다.
+접근 보호가 검증되지 않은 채 Supabase service key를 공개 데이터 API에서 사용하지 않습니다. Supabase 프로젝트에서는 `supabase/migrations/202610130001_initial.sql`, `supabase/migrations/202610150001_spaced_review_schema.sql`, `supabase/migrations/202610160001_single_state_contract.sql`을 순서대로 적용합니다. 기존 프로젝트에도 세 번째 마이그레이션을 적용해야 최신 저장 계약을 사용할 수 있습니다. 이 마이그레이션은 파생 테이블을 `asmd_legacy` 스키마로 옮겨 보존합니다. 기존 DB가 있다면 먼저 백업하고 [저장 계약](docs/STORAGE_CONTRACT.md)을 확인하세요. 이어서 Vercel Deployment Protection에서 프로덕션 도메인까지 접근 보호가 적용되는지 확인하고, 무작위 32자 이상의 서버 토큰을 생성합니다. 실제 값은 `.env` (로컬, gitignore 포함) 또는 Vercel 서버 환경 변수에 설정합니다.
 
 ```dotenv
 NUXT_CLOUD_ENABLED=true

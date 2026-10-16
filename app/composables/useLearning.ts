@@ -15,7 +15,7 @@ export function useLearning(){
   async function spacedAnswer(sessionId:string,itemId:string,value:Answer,duration:number){await mutate(current=>{submitSpacedReview(current,sessionId,itemId,value,duration)})}
   async function setSpacedReviewPosition(id:string,position:number){await mutate(current=>{const s=current.sessions.find(x=>x.id===id);if(!s)throw new Error('학습 기록을 찾을 수 없어요.');s.spacedReviewPosition=position})}
   async function changeMode(next:'local'|'cloud',token=''){if(busy.value)return;busy.value=true;try{const candidate=next==='local'?new IndexedDbLearningRepository():new ServerApiLearningRepository(token);const loaded=await candidate.load();repository=candidate;state.value=loaded;mode.value=next;ready.value=true;error.value=''}finally{busy.value=false}}
-  async function restore(data:AppState){await mutate(current=>{const revision=current.revision;Object.assign(current,structuredClone(data),{revision})})}
+  async function restore(data:AppState){await mutate(current=>{const revision=current.revision;Object.assign(current,structuredClone(toRaw(data)),{revision})})}
   async function clear(){await mutate(current=>{const revision=current.revision;Object.assign(current,emptyState(),{revision})})}
   return {state,ready,busy,error,mode,init,startDaily,startFree,savePlan,setReviewQuestionLimit,answer,spacedAnswer,setSpacedReviewPosition,changeMode,restore,clear,session:(id:string):Session|undefined=>state.value.sessions.find(s=>s.id===id)}
 }
