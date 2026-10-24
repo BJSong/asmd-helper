@@ -106,6 +106,19 @@ describe('cloud API to database contract', () => {
     } finally { config.cloudAccessToken=oldPassword }
   })
 
+  it('returns a configuration error when the deployment parses the family password as a number', async () => {
+    globals()
+    vi.stubGlobal('defineEventHandler',(handler:unknown)=>handler)
+    vi.stubGlobal('readBody',async()=>({password:'123456'}))
+    const {default:login}=await import('../server/api/family-login.post')
+    const oldPassword=config.cloudAccessToken
+    try {
+      config.cloudAccessToken=123456 as unknown as string
+      expect(() => cloudStorageMode(event)).toThrowError(expect.objectContaining({statusCode:503}))
+      await expect(login(event)).rejects.toMatchObject({statusCode:503})
+    } finally { config.cloudAccessToken=oldPassword }
+  })
+
   it('rejects a tampered family session', () => {
     globals()
     createFamilySession(event)

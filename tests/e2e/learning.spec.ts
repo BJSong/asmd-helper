@@ -190,7 +190,7 @@ test('클라우드 설정에서는 가족 암호 로그인 후 계획을 서버�
 test('클라우드 설정 오류가 나면 로컬 저장으로 넘어가지 않는다',async({page})=>{
  await page.route('**/api/storage-mode',route=>route.fulfill({status:503,json:{error:'Cloud configuration incomplete'}}))
  await page.goto('/plan')
- await expect(page.getByRole('alert')).toContainText('저장소 설정을 확인할 수 없어요.')
+ await expect(page.getByRole('alert')).toContainText('가족 암호는 16자 이상이어야')
  await expect(page.getByRole('button',{name:'계획 저장'})).toHaveCount(0)
  const databases=await page.evaluate(()=>indexedDB.databases())
  expect(databases.map(db=>db.name)).not.toContain('afsr-math-v1')
