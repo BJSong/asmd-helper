@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {symbols,operatorNames,answerSchema,type Question,type Operator} from '#shared/model'
 import {reviewed,formatDuration,nextPosition,retryCount,reviewRetryCount,reviewResolved} from '#domain/learning'
-const route=useRoute(),{session,answer,spacedAnswer,setSpacedReviewPosition,busy,init,state}=useLearning(),id=String(route.query.id??''),isReview=route.query.review==='1',isSpaced=route.query.review==='spaced'
+const route=useRoute(),{session,answer,spacedAnswer,setSpacedReviewPosition,flushDraft,busy,init,state}=useLearning(),id=String(route.query.id??''),isReview=route.query.review==='1',isSpaced=route.query.review==='spaced'
 const current=computed(()=>session(id)),reviewEntries=ref<{sourceQuestionId:string;question:import('#shared/model').Question}[]>([]),reviewIndex=ref(0),value=ref(''),remainder=ref(''),feedback=ref<{correct:boolean;answer:string;revealed:boolean}|null>(null),error=ref(''),input=ref<HTMLInputElement|null>(null)
 const spacedEntries=ref<{id:string;question:Question}[]>([])
 const questions=computed(()=>isSpaced?spacedEntries.value.map(x=>x.question):isReview?reviewEntries.value.map(x=>x.question):current.value?.questions??[])
@@ -15,7 +15,7 @@ const canRetry=computed(()=>feedback.value?.correct===false&&activeRetryCount.va
 const questionPrompt=computed(()=>current.value?.mixedRecognition&&!isReview&&!isSpaced&&!selectedOperator.value?'연산 기호를 고른 뒤 답을 계산해 보세요.':isSpaced?'간격 복습 · 이전에 틀렸던 문제예요.':isReview?'틀렸던 계산과 비슷한 문제예요. 풀어 볼까요?':activeRetryCount.value?`다시 시도 ${activeRetryCount.value}/2 · 답을 차근차근 확인해 보세요.`:'빈칸에 알맞은 답을 써 보세요.')
 const feedbackMessage=computed(()=>feedback.value?.correct?'맞았어요.':feedback.value?.revealed?'도전 횟수를 마쳤어요.':'아직 아니에요. 다시 계산해 볼까요?')
 const retryHint=computed(()=>activeRetryCount.value===0?'두 번 더 풀 수 있어요.':'한 번 더 풀 수 있어요.')
-const feedbackActionLabel=computed(()=>canRetry.value?`다시 풀기 (${activeRetryCount.value+1}/2)`:position.value>=questions.value.length-1?'결과 보기':isReview?'다음 복습 문제':'다음 문제')
+const feedbackActionLabel=computed(()=>canRetry.value?`다시 풀기 (${activeRetryCount.value+1}/2)`:(isReview||isSpaced?reviewIndex.value>=questions.value.length-1:position.value>=questions.value.length)?'결과 보기':isReview||isSpaced?'다음 복습 문제':'다음 문제')
 const showRemainder=computed(()=>!!current.value?.settings.allowRemainder&&(current.value.mixedRecognition?selectedOperator.value==='divide':question.value?.operator==='divide'))
 const elapsed=ref(0);let activeMs=0,inactiveMs=0,last=0,timer:ReturnType<typeof setInterval>|undefined
 function tick(){const now=performance.now(),delta=Math.max(0,now-last);last=now;if(feedback.value)return;if(document.hidden)inactiveMs+=delta;else activeMs+=Math.min(delta,5000);elapsed.value=activeMs}
@@ -29,13 +29,14 @@ async function send(){if(feedback.value||busy.value||!question.value)return;erro
  if(!/^-?\d+$/.test(value.value.trim())||(isDivision&&current.value?.settings.allowRemainder&&!/^\d+$/.test(remainder.value.trim()))){error.value='정수로 답을 입력해 주세요.';return}
  const parsed=answerSchema.safeParse({value:Number(value.value),...(isDivision?{remainder:Number(remainder.value||0)}:{}),...(current.value?.mixedRecognition&&!isReview&&!isSpaced?{operator:submittedOperator}:{})});if(!parsed.success){error.value='입력한 수를 다시 확인해 주세요.';return}
  tick();const hasReviewQuestion=current.value!.reviewQuestions.some(x=>x.question.id===q.id);const kind=isReview?(hasReviewQuestion?(current.value!.reviewAttempts.some(a=>a.questionId===q.id)?'reviewRetry':'review'):'review'):current.value!.attempts.some(a=>a.questionId===q.id)?'retry':'first';try{if(isSpaced){await spacedAnswer(id,spacedItem.value!.id,parsed.data,activeMs);const item=state.value.reviewQueue.find(x=>x.id===spacedItem.value!.id)!;const saved=item.attempts.at(-1)!;feedback.value={correct:saved.correct,answer:!saved.correct&&item.attemptsThisSession>=3?String(q.answer):'',revealed:!saved.correct&&item.attemptsThisSession>=3};return}await answer(id,q.id,parsed.data,activeMs,inactiveMs,kind);const saved=(kind==='review'?(hasReviewQuestion?current.value!.reviewAttempts:current.value!.reviews):kind==='reviewRetry'?current.value!.reviewRetries:kind==='retry'?current.value!.retries:current.value!.attempts).filter(a=>a.questionId===q.id).at(-1)!;const retryNumber=isReview?reviewRetryCount(current.value!,q.id):retryCount(current.value!,q.id);const revealed=!saved.correct&&(current.value!.retryPolicyVersion!==1||(!hasReviewQuestion&&isReview)||retryNumber>=2);feedback.value={correct:saved.correct,answer:revealed?(q.operator==='divide'&&q.remainder?`${q.answer}, 나머지 ${q.remainder}`:String(q.answer)):'',revealed}}catch(e){error.value=(e as Error).message}}
-async function next(){if(!feedback.value)return;if(isReview||isSpaced)reviewIndex.value++;if(isSpaced)await setSpacedReviewPosition(id,reviewIndex.value);if(position.value>=questions.value.length){await navigateTo(`/result?id=${id}`);return}loadQuestion()}
+async function next(){if(!feedback.value)return;if(isReview||isSpaced)reviewIndex.value++;if(isSpaced)await setSpacedReviewPosition(id,reviewIndex.value);if(position.value>=questions.value.length){await flushDraft();await navigateTo(`/result?id=${id}`);return}loadQuestion()}
+async function saveAndExit(){await flushDraft();await navigateTo('/')}
 function feedbackAction(){if(canRetry.value)loadQuestion();else void next()}
 function onEnter(event:KeyboardEvent){if(event.repeat)return;if(feedback.value){event.preventDefault();feedbackAction()}}
 </script>
 <template>
   <div v-if="current" class="learning-page">
-    <header class="learning-header"><NuxtLink to="/" class="brand"><span class="brand-mark">a<span>+</span></span><span>AFSR <b>Math</b></span></NuxtLink><div class="learning-header-actions"><NuxtLink v-if="assignedReviewCount&&!isSpaced" :to="`/learn?id=${id}&review=spaced`" class="btn secondary small">간격 복습 {{assignedReviewCount}}문제</NuxtLink><button class="btn ghost small" :disabled="busy" @click="navigateTo('/')">저장하고 나가기<AppIcon name="close" :size="17"/></button></div></header>
+    <header class="learning-header"><button type="button" class="brand" :disabled="busy" @click="saveAndExit"><span class="brand-mark">a<span>+</span></span><span>AFSR <b>Math</b></span></button><div class="learning-header-actions"><NuxtLink v-if="assignedReviewCount&&!isSpaced" :to="`/learn?id=${id}&review=spaced`" class="btn secondary small">간격 복습 {{assignedReviewCount}}문제</NuxtLink><button class="btn ghost small" :disabled="busy" @click="saveAndExit">저장하고 나가기<AppIcon name="close" :size="17"/></button></div></header>
     <div class="learning-body">
       <div class="learning-label"><span>{{isReview?'유사 복습 문제':current.type==='daily'?'오늘의 학습':'자유 학습'}}</span><b>{{Math.min(position+1,questions.length)}} <span>/ {{questions.length}}</span></b></div>
       <div class="progress-track" role="progressbar" :aria-valuenow="position" :aria-valuemax="questions.length" :aria-valuemin="0" aria-label="학습 진행률"><span :style="{width:`${position/questions.length*100}%`}"/></div>
@@ -60,7 +61,7 @@ function onEnter(event:KeyboardEvent){if(event.repeat)return;if(feedback.value){
         </form>
         <p v-if="current.settings.showTime" class="time-display"><AppIcon name="clock" :size="16"/>{{formatDuration(elapsed)}} · 천천히 풀어도 괜찮아요</p>
       </div>
-      <div class="save-hint"><i/>제출한 답은 자동으로 저장돼요.</div>
+      <div class="save-hint"><i/>제출한 답은 먼저 이 기기에 저장돼요. 학습을 마치거나 나가면 서버에 반영해요.</div>
     </div>
   </div>
   <div v-else class="page"><h1>학습 기록을 찾을 수 없어요.</h1><NuxtLink to="/" class="btn">홈으로</NuxtLink></div>

@@ -15,9 +15,9 @@ export function dailySession(plan:Plan,date=seoulDate(),rng=Math.random):Session
   const settings=structuredClone(plan.weekdaySettings[String(weekday(date))]??plan.settings)
   settings.count=plan.settings.count
   const questions=generateQuestions(settings,rng)
-  return {id:`daily-${date}`,type:'daily',date,settings,planSnapshot:structuredClone(plan),questions,attempts:[],retries:[],reviews:[],reviewQuestions:[],reviewAttempts:[],reviewRetries:[],hintViews:[],scheduledReviewIds:[],spacedReviewPosition:0,mixedRecognition:false,retryPolicyVersion:1,startedAt:new Date().toISOString(),status:'in-progress'}
+  return {id:`daily-${date}`,type:'daily',date,settings,planSnapshot:structuredClone(plan),questions,attempts:[],retries:[],reviews:[],reviewQuestions:[],reviewAttempts:[],reviewRetries:[],hintViews:[],scheduledReviewIds:[],spacedReviewPosition:0,syncCommitIds:[],mixedRecognition:false,retryPolicyVersion:1,startedAt:new Date().toISOString(),status:'in-progress'}
 }
-export function freeSession(settings:Settings,mixedRecognition=false):Session {return {id:crypto.randomUUID(),type:'free',date:seoulDate(),settings:structuredClone(settings),questions:generateQuestions(settings),attempts:[],retries:[],reviews:[],reviewQuestions:[],reviewAttempts:[],reviewRetries:[],hintViews:[],scheduledReviewIds:[],spacedReviewPosition:0,mixedRecognition,retryPolicyVersion:1,startedAt:new Date().toISOString(),status:'in-progress'}}
+export function freeSession(settings:Settings,mixedRecognition=false):Session {return {id:crypto.randomUUID(),type:'free',date:seoulDate(),settings:structuredClone(settings),questions:generateQuestions(settings),attempts:[],retries:[],reviews:[],reviewQuestions:[],reviewAttempts:[],reviewRetries:[],hintViews:[],scheduledReviewIds:[],spacedReviewPosition:0,syncCommitIds:[],mixedRecognition,retryPolicyVersion:1,startedAt:new Date().toISOString(),status:'in-progress'}}
 export function scheduleReviews(state:AppState,session:Session){
   state.sessionCounter++
   const due=state.reviewQueue.filter(x=>x.status!=='mastered'&&!x.assignedSessionId&&x.dueSession<=state.sessionCounter).sort((a,b)=>a.firstWrongAt.localeCompare(b.firstWrongAt)||a.interval-b.interval).slice(0,state.reviewQuestionLimit)

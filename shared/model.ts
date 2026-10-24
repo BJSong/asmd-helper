@@ -48,6 +48,7 @@ export const sessionSchema = z.object({
   hintViews:z.array(hintLogSchema).max(400).default([]),
   scheduledReviewIds:z.array(z.string()).max(10).default([]),
   spacedReviewPosition:z.number().int().nonnegative().default(0),
+  syncCommitIds:z.array(z.string().uuid()).max(100).default([]),
   startedAt: z.string().datetime(), completedAt: z.string().datetime().optional(), status: z.enum(['in-progress','completed']),
 }).superRefine((s,ctx) => {
   const ids = new Set(s.questions.map(q=>q.id))

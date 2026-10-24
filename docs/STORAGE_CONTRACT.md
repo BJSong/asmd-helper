@@ -8,11 +8,11 @@
 
 ## 불변조건
 
-1. 앱 모델은 `shared/model.ts`의 `stateSchema`로 검증한다. SQL은 현재 `schemaVersion = 2`를 받고 `data.revision = app_state.revision`을 강제한다.
+1. 앱 모델은 `shared/model.ts`의 `stateSchema`로 검증한다. SQL은 현재 `schemaVersion = 2`를 받고 `data.revision = app_state.revision`을 강제한다. 선택적 `session.syncCommitIds`는 과거 v2 데이터에서 빈 배열로 보완한다.
 2. 빈 DB에서 첫 저장은 `expected_revision = 0`만 허용한다. 이후 저장은 DB의 현재 revision과 기대 revision이 같을 때만 성공한다. 실패한 저장은 기존 상태를 바꾸지 않는다.
 3. 최초 답안, 재시도, 세션 복습, 간격 복습, 계획, 설정은 모두 `data` 안에 보존한다. 특정 기록을 별도 테이블에서 조회하지 않는다.
 4. `anon`과 `authenticated`는 테이블과 저장 함수에 접근할 수 없다. 서버만 server secret 키로 접근하고, 서버 API는 가족 암호 로그인으로 발급한 서명된 HttpOnly 세션 쿠키를 검사한다.
-5. 로컬과 클라우드 저장소는 자동 동기화하지 않는다. JSON 백업·복원은 같은 `AppState` 모델을 사용한다.
+5. 클라우드 학습은 시작 시 서버에 세션을 저장하고, 풀이 중 답안을 IndexedDB 초안에 저장한다. 완료 또는 나가기 시 세션 변경만 서버 스냅샷에 병합한다. 실패한 초안은 같은 기기에 보관하고 다음 접속에서 재시도한다. 과거 로컬 기록의 일괄 이전은 제공하지 않는다. JSON 백업·복원은 같은 `AppState` 모델을 사용한다.
 
 ## 자동 검증
 

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { emptyState } from '../../shared/model'
+import { mergeCloudCommit } from '../../domain/cloud-sync'
 
 function equation(text:string){
  const match=text.match(/(-?\d+)\s*([+−×÷])\s*(-?\d+)/)
@@ -14,8 +15,8 @@ async function submitAnswer(page:any,wrong=false){
  const expected=wrong?answer+1:answer
  await page.getByLabel('정답').fill(String(expected))
  await page.getByRole('button',{name:'정답 확인'}).click()
- await expect(page.getByRole('status')).toBeVisible()
- if(!wrong)await expect(page.getByRole('status')).toContainText('맞았어요.')
+ await expect(page.locator('.answer-feedback')).toBeVisible()
+ if(!wrong)await expect(page.locator('.answer-feedback')).toContainText('맞았어요.')
 }
 async function answerQuestion(page:any){
  await submitAnswer(page,false)
@@ -194,4 +195,78 @@ test('클라우드 설정 오류가 나면 로컬 저장으로 넘어가지 않�
  await expect(page.getByRole('button',{name:'계획 저장'})).toHaveCount(0)
  const databases=await page.evaluate(()=>indexedDB.databases())
  expect(databases.map(db=>db.name)).not.toContain('afsr-math-v1')
+})
+
+test('클라우드 학습은 문제마다 로컬에 저장하고 완료할 때 한 번 동기화한다',async({page})=>{
+ let stored=emptyState(),stateWrites=0,commits=0
+ await page.route('**/api/storage-mode',route=>route.fulfill({json:{mode:'cloud'}}))
+ await page.route('**/api/family-login',route=>route.fulfill({json:{ok:true},headers:{'set-cookie':'asmd_session=test; Path=/; HttpOnly; SameSite=Strict'}}))
+ await page.route('**/api/cloud/state',async route=>{
+  if(!route.request().headers()['cookie']?.includes('asmd_session=test'))return route.fulfill({status:401,json:{error:'Sign-in required'}})
+  if(route.request().method()==='GET')return route.fulfill({json:stored})
+  stateWrites++
+  const body=route.request().postDataJSON() as {state:typeof stored;expectedRevision:number}
+  stored={...body.state,revision:stored.revision+1}
+  return route.fulfill({json:stored})
+ })
+ await page.route('**/api/cloud/commit-session',async route=>{
+  commits++
+  const next=mergeCloudCommit(stored,route.request().postDataJSON())
+  stored={...next,revision:stored.revision+1}
+  await route.fulfill({json:stored})
+ })
+ await page.goto('/practice')
+ await page.getByLabel('가족 공용 암호').fill('family-test-password')
+ await page.getByRole('button',{name:'학습 공간 열기'}).click()
+ await page.getByLabel('사용자 지정 문제 수').fill('2')
+ await page.getByRole('button',{name:'학습 시작'}).click()
+ await expect(page.getByTestId('equation')).toBeVisible()
+ expect(stateWrites).toBe(1)
+ await submitAnswer(page)
+ await page.getByRole('button',{name:'다음 문제'}).click()
+ expect(stateWrites).toBe(1)
+ expect(commits).toBe(0)
+ await page.reload()
+ await expect(page.getByTestId('equation')).toBeVisible()
+ expect(stored.sessions[0]?.attempts).toHaveLength(0)
+ await submitAnswer(page)
+ await page.getByRole('button',{name:'결과 보기'}).click()
+ await expect(page.getByRole('heading',{name:'오늘의 연습을 마쳤어요.'})).toBeVisible()
+ await expect.poll(()=>commits).toBe(1)
+ expect(stateWrites).toBe(1)
+ expect(stored.sessions[0]?.attempts).toHaveLength(2)
+})
+
+test('종료 동기화가 실패해도 로컬 답안을 복구하고 다음 접속에서 재시도한다',async({page})=>{
+ let stored=emptyState(),commits=0
+ await page.route('**/api/storage-mode',route=>route.fulfill({json:{mode:'cloud'}}))
+ await page.route('**/api/family-login',route=>route.fulfill({json:{ok:true},headers:{'set-cookie':'asmd_session=test; Path=/; HttpOnly; SameSite=Strict'}}))
+ await page.route('**/api/cloud/state',async route=>{
+  if(!route.request().headers()['cookie']?.includes('asmd_session=test'))return route.fulfill({status:401,json:{error:'Sign-in required'}})
+  if(route.request().method()==='GET')return route.fulfill({json:stored})
+  const body=route.request().postDataJSON() as {state:typeof stored}
+  stored={...body.state,revision:stored.revision+1}
+  return route.fulfill({json:stored})
+ })
+ await page.route('**/api/cloud/commit-session',async route=>{
+  commits++
+  if(commits===1)return route.fulfill({status:502,json:{error:'offline'}})
+  stored={...mergeCloudCommit(stored,route.request().postDataJSON()),revision:stored.revision+1}
+  return route.fulfill({json:stored})
+ })
+ await page.goto('/practice')
+ await page.getByLabel('가족 공용 암호').fill('family-test-password')
+ await page.getByRole('button',{name:'학습 공간 열기'}).click()
+ await page.getByLabel('사용자 지정 문제 수').fill('2')
+ await page.getByRole('button',{name:'학습 시작'}).click()
+ await expect(page.getByTestId('equation')).toBeVisible()
+ await submitAnswer(page)
+ await page.getByRole('button',{name:'저장하고 나가기'}).click()
+ await expect(page.getByText('서버 저장에 실패했어요. 답안은 이 기기에 보관되어 있습니다.')).toBeVisible()
+ await expect(page).toHaveURL(/\/$/)
+ expect(stored.sessions[0]?.attempts).toHaveLength(0)
+ await page.reload()
+ await expect.poll(()=>commits).toBe(2)
+ await expect(page.getByText('Supabase에 저장 중')).toBeVisible()
+ expect(stored.sessions[0]?.attempts).toHaveLength(1)
 })
