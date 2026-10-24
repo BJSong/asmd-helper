@@ -5,7 +5,7 @@ import { migrateState } from '#repositories/learning'
 export function cloudStorageMode(event:H3Event):'local'|'cloud'{
   const config=useRuntimeConfig(event)
   if(![true,'true'].includes(config.cloudEnabled))return 'local'
-  if(typeof config.cloudAccessToken!=='string'||config.cloudAccessToken.length<16||
+  if(typeof config.cloudAccessToken!=='string'||config.cloudAccessToken.length<8||
     typeof config.supabaseUrl!=='string'||!config.supabaseUrl||
     typeof config.supabaseServiceKey!=='string'||!config.supabaseServiceKey)
     throw createError({statusCode:503,statusMessage:'Cloud storage requires family access password and server settings'})

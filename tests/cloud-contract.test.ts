@@ -95,13 +95,13 @@ describe('cloud API to database contract', () => {
     finally { config.supabaseServiceKey=key }
   })
 
-  it('accepts a 16-character family passphrase and rejects a short password', () => {
+  it('accepts an 8-character family password and rejects a 7-character password', () => {
     globals()
     const oldPassword=config.cloudAccessToken
     try {
-      config.cloudAccessToken='가'.repeat(16)
+      config.cloudAccessToken='가'.repeat(8)
       expect(cloudStorageMode(event)).toBe('cloud')
-      config.cloudAccessToken='123456'
+      config.cloudAccessToken='1234567'
       expect(() => cloudStorageMode(event)).toThrowError(expect.objectContaining({statusCode:503}))
     } finally { config.cloudAccessToken=oldPassword }
   })
@@ -109,11 +109,11 @@ describe('cloud API to database contract', () => {
   it('returns a configuration error when the deployment parses the family password as a number', async () => {
     globals()
     vi.stubGlobal('defineEventHandler',(handler:unknown)=>handler)
-    vi.stubGlobal('readBody',async()=>({password:'123456'}))
+    vi.stubGlobal('readBody',async()=>({password:'12345678'}))
     const {default:login}=await import('../server/api/family-login.post')
     const oldPassword=config.cloudAccessToken
     try {
-      config.cloudAccessToken=123456 as unknown as string
+      config.cloudAccessToken=12345678 as unknown as string
       expect(() => cloudStorageMode(event)).toThrowError(expect.objectContaining({statusCode:503}))
       await expect(login(event)).rejects.toMatchObject({statusCode:503})
     } finally { config.cloudAccessToken=oldPassword }
@@ -151,11 +151,15 @@ describe('cloud API to database contract', () => {
     const cookie=vi.fn()
     vi.stubGlobal('setCookie',cookie)
     const {default:login}=await import('../server/api/family-login.post')
-    vi.stubGlobal('readBody',async()=>({password:'wrong'}))
-    await expect(login(event)).rejects.toMatchObject({statusCode:401})
-    expect(cookie).not.toHaveBeenCalled()
-    vi.stubGlobal('readBody',async()=>({password:config.cloudAccessToken}))
-    await expect(login(event)).resolves.toEqual({ok:true})
-    expect(cookie).toHaveBeenCalledWith(event,'asmd_session',expect.any(String),expect.objectContaining({httpOnly:true,sameSite:'strict',path:'/',maxAge:30*24*60*60}))
+    const oldPassword=config.cloudAccessToken
+    try {
+      config.cloudAccessToken='family88'
+      vi.stubGlobal('readBody',async()=>({password:'wrong'}))
+      await expect(login(event)).rejects.toMatchObject({statusCode:401})
+      expect(cookie).not.toHaveBeenCalled()
+      vi.stubGlobal('readBody',async()=>({password:config.cloudAccessToken}))
+      await expect(login(event)).resolves.toEqual({ok:true})
+      expect(cookie).toHaveBeenCalledWith(event,'asmd_session',expect.any(String),expect.objectContaining({httpOnly:true,sameSite:'strict',path:'/',maxAge:30*24*60*60}))
+    } finally { config.cloudAccessToken=oldPassword }
   })
 })

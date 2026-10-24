@@ -45,12 +45,12 @@ Vercel 프로젝트의 **Production 환경변수**에 아래 값을 등록하고
 
 ```dotenv
 NUXT_CLOUD_ENABLED=true
-NUXT_CLOUD_ACCESS_TOKEN=<16자 이상의 고유한 가족용 암호 문장>
+NUXT_CLOUD_ACCESS_TOKEN=<8자 이상의 가족용 공용 암호>
 NUXT_SUPABASE_URL=https://<project-ref>.supabase.co
 NUXT_SUPABASE_SERVICE_KEY=<Supabase 서버 전용 secret 키 또는 기존 service_role 키>
 ```
 
-`NUXT_CLOUD_ENABLED=true`이면 앱은 처음부터 클라우드 저장소를 선택합니다. 가족은 URL에 접속한 뒤 공용 암호를 한 번 입력합니다. 16자 이상의 기억하기 쉬운 고유한 문장을 사용할 수 있으며, 브라우저의 암호 저장 기능을 이용하면 다시 입력할 필요가 줄어듭니다. 서버는 30일 동안 유효한 서명된 HttpOnly/SameSite 쿠키를 발급하고, 모든 클라우드 요청에서 확인합니다. 암호와 Supabase 서버 키는 클라이언트 코드에 포함하지 않습니다. 클라우드 설정이 불완전하거나 서버 연결이 실패하면 로컬에 조용히 저장하지 않고 오류를 표시합니다. `NUXT_CLOUD_ENABLED=false`이면 IndexedDB 로컬 모드입니다. 자동 로컬 기록 이전은 제공하지 않습니다.
+`NUXT_CLOUD_ENABLED=true`이면 앱은 처음부터 클라우드 저장소를 선택합니다. 가족은 URL에 접속한 뒤 공용 암호를 한 번 입력합니다. 암호는 8자 이상이며, 브라우저의 암호 저장 기능을 이용하면 다시 입력할 필요가 줄어듭니다. 서버는 30일 동안 유효한 서명된 HttpOnly/SameSite 쿠키를 발급하고, 모든 클라우드 요청에서 확인합니다. 암호와 Supabase 서버 키는 클라이언트 코드에 포함하지 않습니다. 클라우드 설정이 불완전하거나 서버 연결이 실패하면 로컬에 조용히 저장하지 않고 오류를 표시합니다. `NUXT_CLOUD_ENABLED=false`이면 IndexedDB 로컬 모드입니다. 자동 로컬 기록 이전은 제공하지 않습니다.
 
 이 방식은 **가족이 같은 기록을 사용하는 단일 저장 공간**이며, 사용자별 계정이나 기록 분리는 제공하지 않습니다. 가족 공용 암호가 유출되면 Vercel 환경변수에서 교체하고 재배포해야 합니다. 공개 URL을 공유할 때는 다른 사이트에서 사용하지 않는 암호 문장을 선택하고 `123456` 같은 짧고 흔한 암호는 사용하지 마세요.
 
