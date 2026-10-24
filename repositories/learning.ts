@@ -2,6 +2,7 @@ import { openDB, type IDBPDatabase } from 'idb'
 import { emptyState, stateSchema, type AppState } from '#shared/model'
 export interface LearningRepository { load():Promise<AppState>; save(state:AppState,expectedRevision:number):Promise<AppState>; clear(expectedRevision:number):Promise<AppState> }
 export class ConflictError extends Error { constructor(){super('다른 탭에서 기록이 바뀌었어요. 화면을 다시 열어 주세요.')} }
+export class FamilySignInRequiredError extends Error { constructor(){super('가족 공용 암호로 로그인해 주세요.')} }
 export function migrateState(input:unknown):AppState {
   if(!input||typeof input!=='object'||!('schemaVersion' in input))throw new Error('지원하지 않거나 손상된 학습 데이터예요.')
   const raw=input as Record<string,unknown>
@@ -22,10 +23,9 @@ export class IndexedDbLearningRepository implements LearningRepository {
   async clear(revision:number){return this.save(emptyState(),revision)}
 }
 export class ServerApiLearningRepository implements LearningRepository {
-  constructor(private token:string){}
   private async request(method:string,body?:unknown):Promise<AppState>{
-    const response=await fetch('/api/cloud/state',{method,headers:{'Content-Type':'application/json',Authorization:`Bearer ${this.token}`},...(body?{body:JSON.stringify(body)}:{})})
-    if(!response.ok){if(response.status===409)throw new ConflictError();throw new Error(response.status===401?'접근 키를 확인해 주세요.':response.status===503?'클라우드 연결이 준비되지 않았어요. 서버 설정을 확인해 주세요.':'클라우드 저장에 실패했어요. 연결을 확인한 뒤 다시 시도해 주세요.')}
+    const response=await fetch('/api/cloud/state',{method,headers:{'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})})
+    if(!response.ok){if(response.status===401)throw new FamilySignInRequiredError();if(response.status===409)throw new ConflictError();throw new Error(response.status===503?'클라우드 연결이 준비되지 않았어요. 서버 설정을 확인해 주세요.':'클라우드 저장에 실패했어요. 연결을 확인한 뒤 다시 시도해 주세요.')}
     return stateSchema.parse(await response.json())
   }
   load(){return this.request('GET')}

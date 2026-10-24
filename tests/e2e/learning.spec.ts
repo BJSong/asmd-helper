@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { emptyState } from '../../shared/model'
 
 function equation(text:string){
  const match=text.match(/(-?\d+)\s*([+−×÷])\s*(-?\d+)/)
@@ -148,4 +149,49 @@ test('설정 변경과 JSON 백업·복원·삭제가 새로고침 후에도 일
  await expect(limit).toHaveValue('3')
  await page.reload()
  await expect(limit).toHaveValue('3')
+})
+
+test('클라우드 설정에서는 가족 암호 로그인 후 계획을 서버에 저장하고 새로고침해도 유지한다',async({page})=>{
+ let stored=emptyState()
+ await page.route('**/api/storage-mode',route=>route.fulfill({json:{mode:'cloud'}}))
+ await page.route('**/api/family-login',async route=>{
+  const input=route.request().postDataJSON() as {password:string}
+  await route.fulfill(input.password==='family-test-password'?{json:{ok:true},headers:{'set-cookie':'asmd_session=test; Path=/; HttpOnly; SameSite=Strict'}}:{status:401,json:{error:'Incorrect password'}})
+ })
+ await page.route('**/api/cloud/state',async route=>{
+  const request=route.request()
+  if(!request.headers()['cookie']?.includes('asmd_session=test'))return route.fulfill({status:401,json:{error:'Sign-in required'}})
+  if(request.method()==='GET')return route.fulfill({json:stored})
+  expect(request.headers()['authorization']).toBeUndefined()
+  const body=request.postDataJSON() as {state:typeof stored;expectedRevision:number}
+  expect(body.expectedRevision).toBe(stored.revision)
+  stored={...body.state,revision:stored.revision+1}
+  return route.fulfill({json:stored})
+ })
+ await page.goto('/plan')
+ await expect(page.getByRole('heading',{name:'가족 학습 공간'})).toBeVisible()
+ await page.getByLabel('가족 공용 암호').fill('family-test-password')
+ await page.getByRole('button',{name:'학습 공간 열기'}).click()
+ await expect(page.getByRole('heading',{name:'나의 학습 계획'})).toBeVisible()
+ const operations=page.locator('.settings-fields').first()
+ await operations.getByRole('button',{name:/곱셈/}).click()
+ await operations.getByRole('button',{name:/덧셈/}).click()
+ await page.getByRole('button',{name:'계획 저장'}).click()
+ await expect(page.getByRole('status')).toContainText('다음 새 과제부터 적용돼요.')
+ expect(stored.plan.settings.operators).toContain('multiply')
+ expect(stored.plan.settings.operators).not.toContain('add')
+ await page.reload()
+ await expect(page.getByText('Supabase에 저장 중')).toBeVisible()
+ await expect(operations.getByRole('button',{name:/곱셈/})).toHaveAttribute('aria-pressed','true')
+ const databases=await page.evaluate(()=>indexedDB.databases())
+ expect(databases.map(db=>db.name)).not.toContain('afsr-math-v1')
+})
+
+test('클라우드 설정 오류가 나면 로컬 저장으로 넘어가지 않는다',async({page})=>{
+ await page.route('**/api/storage-mode',route=>route.fulfill({status:503,json:{error:'Cloud configuration incomplete'}}))
+ await page.goto('/plan')
+ await expect(page.getByRole('alert')).toContainText('저장소 설정을 확인할 수 없어요.')
+ await expect(page.getByRole('button',{name:'계획 저장'})).toHaveCount(0)
+ const databases=await page.evaluate(()=>indexedDB.databases())
+ expect(databases.map(db=>db.name)).not.toContain('afsr-math-v1')
 })

@@ -30,7 +30,7 @@
 - `shared/`: Zod 데이터 모델과 검증
 - `repositories/`: IndexedDB와 Nuxt 서버 저장소, 충돌 감지, JSON 백업/복원
 - `app/`: 반응형 한국어 홈, 자유 학습, 풀이, 결과, 복습, 기록 달력, 계획, 데이터 설정
-- `server/api/cloud/`: 보호된 클라우드 API. Runtime 설정과 서버 접근 토큰이 준비되지 않으면 HTTP 503으로 비활성화
+- `server/api/cloud/`: 가족 로그인 세션으로 보호된 클라우드 API. 클라우드 설정이 불완전하면 HTTP 503을 반환
 - `supabase/migrations/`: 단일 학습 상태 스냅샷의 revision CAS와 비공개 RLS 정책. 세 번째 마이그레이션에서 앱이 사용하지 않던 파생 테이블을 보관 스키마로 이동
 - `tests/database.test.ts`: 실제 앱 상태를 PostgreSQL 호환 엔진에 저장·복원하는 스키마 계약 테스트
 - `docs/WORKFLOW.md`: 분석 → 설계 → 구현 → 테스트 → 완성 과정
@@ -39,20 +39,23 @@
 
 ## Supabase 연결 및 보안
 
-접근 보호가 검증되지 않은 채 Supabase service key를 공개 데이터 API에서 사용하지 않습니다. Supabase 프로젝트에서는 `supabase/migrations/202610130001_initial.sql`, `supabase/migrations/202610150001_spaced_review_schema.sql`, `supabase/migrations/202610160001_single_state_contract.sql`을 순서대로 적용합니다. 기존 프로젝트에도 세 번째 마이그레이션을 적용해야 최신 저장 계약을 사용할 수 있습니다. 이 마이그레이션은 파생 테이블을 `asmd_legacy` 스키마로 옮겨 보존합니다. 기존 DB가 있다면 먼저 백업하고 [저장 계약](docs/STORAGE_CONTRACT.md)을 확인하세요. 이어서 Vercel Deployment Protection에서 프로덕션 도메인까지 접근 보호가 적용되는지 확인하고, 무작위 32자 이상의 서버 토큰을 생성합니다. 실제 값은 `.env` (로컬, gitignore 포함) 또는 Vercel 서버 환경 변수에 설정합니다.
+이 앱은 가족이 하나의 학습 기록을 공유하는 개인용 저장소입니다. Supabase 프로젝트에는 `supabase/migrations/202610130001_initial.sql`, `supabase/migrations/202610150001_spaced_review_schema.sql`, `supabase/migrations/202610160001_single_state_contract.sql`을 순서대로 적용합니다. 데이터 기준은 `public.app_state` 한 행이며 자세한 계약은 [저장 계약](docs/STORAGE_CONTRACT.md)에 있습니다.
+
+Vercel 프로젝트의 **Production 환경변수**에 아래 값을 등록하고 새 배포를 만듭니다. Preview에는 운영 DB 키를 넣지 않습니다. 실제 값은 Git에 올리지 않습니다.
 
 ```dotenv
 NUXT_CLOUD_ENABLED=true
-NUXT_CLOUD_ACCESS_TOKEN=<32자 이상의 무작위 비밀값>
+NUXT_CLOUD_ACCESS_TOKEN=<32자 이상의 무작위 가족 공용 암호>
 NUXT_SUPABASE_URL=https://<project-ref>.supabase.co
-NUXT_SUPABASE_SERVICE_KEY=<Supabase 서버 전용 service role 키>
+NUXT_SUPABASE_SERVICE_KEY=<Supabase 서버 전용 secret 키 또는 기존 service_role 키>
 ```
 
-환경 변수 이름은 Nuxt runtime config에 매핑됩니다. 배포 후 인증된 사용자만 `/settings`에서 서버 접근 토큰을 입력해 클라우드 모드로 전환합니다. 토큰은 탭 메모리에만 남고 새로고침 후 사라집니다. 브라우저 번들에는 service role 키가 포함되지 않습니다. 기존 로컬 데이터는 자동으로 업로드되지 않으므로, 백업 파일을 준비한 뒤 클라우드 모드로 전환하고 가져오기 기능을 사용합니다. 이 MVP는 단일 개인 workspace의 revision 스냅샷으로 저장합니다. 여러 명이 같은 보호 토큰을 공유하는 서비스 인증은 제공하지 않습니다.
+`NUXT_CLOUD_ENABLED=true`이면 앱은 처음부터 클라우드 저장소를 선택합니다. 가족은 URL에 접속한 뒤 공용 암호를 한 번 입력합니다. 서버는 7일 동안 유효한 서명된 HttpOnly/SameSite 쿠키를 발급하고, 모든 클라우드 요청에서 확인합니다. 암호와 Supabase 서버 키는 클라이언트 코드에 포함하지 않습니다. 클라우드 설정이 불완전하거나 서버 연결이 실패하면 로컬에 조용히 저장하지 않고 오류를 표시합니다. `NUXT_CLOUD_ENABLED=false`이면 IndexedDB 로컬 모드입니다. 자동 로컬 기록 이전은 제공하지 않습니다.
+
+이 방식은 **가족이 같은 기록을 사용하는 단일 저장 공간**이며, 사용자별 계정이나 기록 분리는 제공하지 않습니다. 가족 공용 암호가 유출되면 Vercel 환경변수에서 교체하고 재배포해야 합니다. 공개 URL을 공유할 때는 강한 무작위 암호를 사용하세요.
 
 ## 알려진 제한
 
 - 회원가입, AI 생성/채점, 자동 로컬/클라우드 동기화는 구현하지 않았습니다.
-- 새로고침 후 탭별 cloud token은 다시 입력해야 합니다.
 - 자동 브라우저 E2E는 `npm run test:e2e`로 실행할 수 있으며 앱과 분리된 로컬 포트를 사용합니다.
 - Supabase 연결 및 Vercel 배포는 사용자의 프로젝트와 보호 환경 설정이 필요합니다. 이 저장소에서는 외부 계정에 연결하거나 배포를 완료했다고 표시하지 않습니다.
