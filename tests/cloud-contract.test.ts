@@ -21,7 +21,7 @@ function globals(fetcher = vi.fn()) {
   return fetcher
 }
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs() })
 
 describe('cloud API to database contract', () => {
   it('keeps the service key server-side and sends the expected revisioned snapshot', async () => {
@@ -116,6 +116,21 @@ describe('cloud API to database contract', () => {
       config.cloudAccessToken=12345678 as unknown as string
       expect(() => cloudStorageMode(event)).toThrowError(expect.objectContaining({statusCode:503}))
       await expect(login(event)).rejects.toMatchObject({statusCode:503})
+    } finally { config.cloudAccessToken=oldPassword }
+  })
+
+  it('uses the original environment string when an eight-digit password was parsed as a number', async () => {
+    globals()
+    vi.stubGlobal('defineEventHandler',(handler:unknown)=>handler)
+    vi.stubGlobal('readBody',async()=>({password:'12345678'}))
+    vi.stubEnv('NUXT_CLOUD_ACCESS_TOKEN','12345678')
+    const {default:login}=await import('../server/api/family-login.post')
+    const oldPassword=config.cloudAccessToken
+    try {
+      config.cloudAccessToken=12345678 as unknown as string
+      expect(cloudStorageMode(event)).toBe('cloud')
+      await expect(login(event)).resolves.toEqual({ok:true})
+      expect(() => authorizeCloud(event)).not.toThrow()
     } finally { config.cloudAccessToken=oldPassword }
   })
 

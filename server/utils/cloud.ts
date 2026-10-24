@@ -2,10 +2,16 @@ import type { H3Event } from 'h3'
 import { createHmac, timingSafeEqual, randomBytes } from 'node:crypto'
 import { stateSchema, emptyState, type AppState } from '#shared/model'
 import { migrateState } from '#repositories/learning'
+export function familyPassword(event:H3Event):string{
+  const raw=process.env.NUXT_CLOUD_ACCESS_TOKEN
+  if(typeof raw==='string')return raw
+  const configured=useRuntimeConfig(event).cloudAccessToken
+  return typeof configured==='string'?configured:''
+}
 export function cloudStorageMode(event:H3Event):'local'|'cloud'{
   const config=useRuntimeConfig(event)
   if(![true,'true'].includes(config.cloudEnabled))return 'local'
-  if(typeof config.cloudAccessToken!=='string'||config.cloudAccessToken.length<8||
+  if(familyPassword(event).length<8||
     typeof config.supabaseUrl!=='string'||!config.supabaseUrl||
     typeof config.supabaseServiceKey!=='string'||!config.supabaseServiceKey)
     throw createError({statusCode:503,statusMessage:'Cloud storage requires family access password and server settings'})
@@ -15,7 +21,7 @@ const SESSION_AGE_SECONDS=30*24*60*60
 const SESSION_COOKIE='asmd_session'
 function signature(event:H3Event,payload:string){
   const config=useRuntimeConfig(event)
-  const signingKey=createHmac('sha256',config.supabaseServiceKey).update(`asmd-family-session-v1:${config.cloudAccessToken}`).digest()
+  const signingKey=createHmac('sha256',config.supabaseServiceKey).update(`asmd-family-session-v1:${familyPassword(event)}`).digest()
   return createHmac('sha256',signingKey).update(payload).digest('hex')
 }
 export function createFamilySession(event:H3Event){
