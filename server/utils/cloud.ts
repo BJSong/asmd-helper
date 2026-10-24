@@ -5,28 +5,30 @@ import { migrateState } from '#repositories/learning'
 export function cloudStorageMode(event:H3Event):'local'|'cloud'{
   const config=useRuntimeConfig(event)
   if(![true,'true'].includes(config.cloudEnabled))return 'local'
-  if(!config.cloudAccessToken||config.cloudAccessToken.length<32||!config.supabaseUrl||!config.supabaseServiceKey)
+  if(!config.cloudAccessToken||config.cloudAccessToken.length<16||!config.supabaseUrl||!config.supabaseServiceKey)
     throw createError({statusCode:503,statusMessage:'Cloud storage requires family access password and server settings'})
   return 'cloud'
 }
-const SESSION_AGE_SECONDS=7*24*60*60
+const SESSION_AGE_SECONDS=30*24*60*60
 const SESSION_COOKIE='asmd_session'
-function signature(secret:string,payload:string){return createHmac('sha256',secret).update(payload).digest('hex')}
+function signature(event:H3Event,payload:string){
+  const config=useRuntimeConfig(event)
+  const signingKey=createHmac('sha256',config.supabaseServiceKey).update(`asmd-family-session-v1:${config.cloudAccessToken}`).digest()
+  return createHmac('sha256',signingKey).update(payload).digest('hex')
+}
 export function createFamilySession(event:H3Event){
   if(cloudStorageMode(event)!=='cloud')throw createError({statusCode:503,statusMessage:'Cloud storage is disabled'})
-  const secret=useRuntimeConfig(event).cloudAccessToken
   const payload=`v1.${Date.now()+SESSION_AGE_SECONDS*1000}.${randomBytes(16).toString('hex')}`
-  setCookie(event,SESSION_COOKIE,`${payload}.${signature(secret,payload)}`,{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'strict',path:'/',maxAge:SESSION_AGE_SECONDS})
+  setCookie(event,SESSION_COOKIE,`${payload}.${signature(event,payload)}`,{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'strict',path:'/',maxAge:SESSION_AGE_SECONDS})
   setHeader(event,'Cache-Control','no-store')
 }
 export function clearFamilySession(event:H3Event){deleteCookie(event,SESSION_COOKIE,{path:'/'})}
 export function hasFamilySession(event:H3Event):boolean{
-  const secret=useRuntimeConfig(event).cloudAccessToken
   const parts=(getCookie(event,SESSION_COOKIE)??'').split('.')
   if(parts.length!==4||parts[0]!=='v1')return false
   const expiry=Number(parts[1])
   if(!Number.isSafeInteger(expiry)||expiry<=Date.now()||expiry>Date.now()+SESSION_AGE_SECONDS*1000)return false
-  const payload=parts.slice(0,3).join('.'),actual=Buffer.from(parts[3]??'','hex'),expected=Buffer.from(signature(secret,payload),'hex')
+  const payload=parts.slice(0,3).join('.'),actual=Buffer.from(parts[3]??'','hex'),expected=Buffer.from(signature(event,payload),'hex')
   return actual.length===expected.length&&timingSafeEqual(actual,expected)
 }
 export function authorizeCloud(event:H3Event){

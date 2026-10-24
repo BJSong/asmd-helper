@@ -95,6 +95,17 @@ describe('cloud API to database contract', () => {
     finally { config.supabaseServiceKey=key }
   })
 
+  it('accepts a 16-character family passphrase and rejects a short password', () => {
+    globals()
+    const oldPassword=config.cloudAccessToken
+    try {
+      config.cloudAccessToken='가'.repeat(16)
+      expect(cloudStorageMode(event)).toBe('cloud')
+      config.cloudAccessToken='123456'
+      expect(() => cloudStorageMode(event)).toThrowError(expect.objectContaining({statusCode:503}))
+    } finally { config.cloudAccessToken=oldPassword }
+  })
+
   it('rejects a tampered family session', () => {
     globals()
     createFamilySession(event)
@@ -102,11 +113,21 @@ describe('cloud API to database contract', () => {
     expect(() => authorizeCloud(event)).toThrowError(expect.objectContaining({ statusCode: 401 }))
   })
 
+  it('invalidates family sessions when the family password changes', () => {
+    globals()
+    createFamilySession(event)
+    const oldPassword=config.cloudAccessToken
+    try {
+      config.cloudAccessToken='b'.repeat(16)
+      expect(() => authorizeCloud(event)).toThrowError(expect.objectContaining({statusCode:401}))
+    } finally { config.cloudAccessToken=oldPassword }
+  })
+
   it('rejects an expired family session', () => {
     globals()
     createFamilySession(event)
     const now=Date.now()
-    vi.spyOn(Date,'now').mockReturnValue(now+8*24*60*60*1000)
+    vi.spyOn(Date,'now').mockReturnValue(now+31*24*60*60*1000)
     try { expect(() => authorizeCloud(event)).toThrowError(expect.objectContaining({ statusCode: 401 })) }
     finally { vi.restoreAllMocks() }
   })
@@ -122,6 +143,6 @@ describe('cloud API to database contract', () => {
     expect(cookie).not.toHaveBeenCalled()
     vi.stubGlobal('readBody',async()=>({password:config.cloudAccessToken}))
     await expect(login(event)).resolves.toEqual({ok:true})
-    expect(cookie).toHaveBeenCalledWith(event,'asmd_session',expect.any(String),expect.objectContaining({httpOnly:true,sameSite:'strict',path:'/'}))
+    expect(cookie).toHaveBeenCalledWith(event,'asmd_session',expect.any(String),expect.objectContaining({httpOnly:true,sameSite:'strict',path:'/',maxAge:30*24*60*60}))
   })
 })
