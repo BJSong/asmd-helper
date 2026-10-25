@@ -122,9 +122,28 @@ test('학습 계획에서 바꾼 연산은 새 과제와 새로고침 후 설정
 test('작은 화면에서 주 메뉴와 핵심 화면이 가로로 밀리지 않는다',async({page})=>{
  await page.setViewportSize({width:390,height:844})
  await page.goto('/')
- await expect(page.getByRole('link',{name:'설정'})).toBeVisible()
- const widths=await page.evaluate(()=>({viewport:document.documentElement.clientWidth,content:document.documentElement.scrollWidth}))
- expect(widths.content).toBeLessThanOrEqual(widths.viewport)
+ await expect(page.getByRole('link',{name:'부모 화면 열기'})).toBeVisible()
+ for(const path of ['/','/practice','/parent','/history','/plan','/settings']){
+  await page.goto(path)
+  const widths=await page.evaluate(()=>({viewport:document.documentElement.clientWidth,content:document.documentElement.scrollWidth}))
+  expect(widths.content, path).toBeLessThanOrEqual(widths.viewport)
+ }
+})
+
+test('설정 아이콘에서 부모 화면으로 들어가 기록·계획·설정을 찾고 아이 화면으로 돌아온다',async({page})=>{
+ await page.goto('/')
+ await expect(page.getByRole('link',{name:'오늘의 학습 시작'})).toHaveCount(0)
+ await expect(page.getByRole('button',{name:'오늘의 학습 시작'})).toBeVisible()
+ await page.getByRole('link',{name:'부모 화면 열기'}).click()
+ await expect(page.getByRole('heading',{name:'부모 화면'})).toBeVisible()
+ await expect(page.getByRole('link',{name:/학습 기록과 통계/})).toBeVisible()
+ await expect(page.getByRole('link',{name:/학습 계획/})).toBeVisible()
+ await expect(page.getByRole('link',{name:/데이터 및 설정/})).toBeVisible()
+ await page.getByRole('link',{name:/학습 기록과 통계/}).click()
+ await expect(page.getByRole('heading',{name:'쌓여가는 학습 기록'})).toBeVisible()
+ await page.getByRole('link',{name:'부모 화면'}).click()
+ await page.getByRole('link',{name:'아이 화면으로 돌아가기'}).click()
+ await expect(page.getByRole('button',{name:'오늘의 학습 시작'})).toBeVisible()
 })
 
 test('설정 변경과 JSON 백업·복원·삭제가 새로고침 후에도 일치한다',async({page})=>{
@@ -182,7 +201,6 @@ test('클라우드 설정에서는 가족 암호 로그인 후 계획을 서버�
  expect(stored.plan.settings.operators).toContain('multiply')
  expect(stored.plan.settings.operators).not.toContain('add')
  await page.reload()
- await expect(page.getByText('Supabase에 저장 중')).toBeVisible()
  await expect(operations.getByRole('button',{name:/곱셈/})).toHaveAttribute('aria-pressed','true')
  const databases=await page.evaluate(()=>indexedDB.databases())
  expect(databases.map(db=>db.name)).not.toContain('afsr-math-v1')
@@ -267,6 +285,6 @@ test('종료 동기화가 실패해도 로컬 답안을 복구하고 다음 접�
  expect(stored.sessions[0]?.attempts).toHaveLength(0)
  await page.reload()
  await expect.poll(()=>commits).toBe(2)
- await expect(page.getByText('Supabase에 저장 중')).toBeVisible()
+ await expect(page.getByText('서버 저장에 실패했어요. 답안은 이 기기에 보관되어 있습니다.')).toHaveCount(0)
  expect(stored.sessions[0]?.attempts).toHaveLength(1)
 })
